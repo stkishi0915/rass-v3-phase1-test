@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RASS v3 Phase 2-2 Debug Test</title>
+  <title>RASS v3 Phase 2-2 Raw Debug Test</title>
 
   <style>
     body {
@@ -14,7 +14,7 @@
         "Segoe UI",
         sans-serif;
 
-      max-width: 900px;
+      max-width: 1000px;
       margin: 40px auto;
       padding: 0 20px;
       line-height: 1.6;
@@ -44,21 +44,22 @@
       border-radius: 10px;
       padding: 16px;
       margin-top: 18px;
-      min-height: 180px;
+      min-height: 250px;
+      overflow-x: auto;
     }
 
     .note {
       background: #eff6ff;
       border: 1px solid #bfdbfe;
-      padding: 12px 14px;
+      padding: 14px;
       border-radius: 10px;
       margin: 16px 0;
     }
 
-    .debug {
+    .warning {
       background: #fff7ed;
       border: 1px solid #fed7aa;
-      padding: 12px 14px;
+      padding: 14px;
       border-radius: 10px;
       margin: 16px 0;
     }
@@ -73,17 +74,17 @@
 
 <body>
 
-  <h1>RASS v3 Phase 2-2 Debug Test</h1>
+  <h1>RASS v3 Phase 2-2 Raw Debug Test</h1>
 
   <div class="note">
-    このページは Phase 2-2 のデバッグ用です。<br>
-    匿名ログイン → Supabase Edge Function → rass_sessions → Dify
-    のどこでエラーが発生しているか確認します。
+    このページはEdge FunctionのHTTPレスポンスを直接取得する
+    デバッグ専用ページです。
   </div>
 
-  <div class="debug">
-    <strong>現在のテスト内容</strong><br>
-    「こんにちは」を送信し、Edge Function の詳細なエラーJSONを表示します。
+  <div class="warning">
+    <strong>確認内容</strong><br>
+    匿名ログイン → JWT取得 → Edge Functionへfetch →<br>
+    HTTPステータスとレスポンス本文をそのまま表示します。
   </div>
 
   <button id="login">
@@ -115,6 +116,10 @@
       "sb_publishable_flQ-6JFCEMEmeRKOBkdrug_WY1CBMmP";
 
 
+    const FUNCTION_URL =
+      `${SUPABASE_URL}/functions/v1/rass-chat`;
+
+
     const supabase =
       createClient(
         SUPABASE_URL,
@@ -129,22 +134,22 @@
     const out =
       document.getElementById("out");
 
-    const send =
-      document.getElementById("send");
-
     const login =
       document.getElementById("login");
 
+    const send =
+      document.getElementById("send");
+
 
     // =========================================================
-    // Conversation ID
+    // State
     // =========================================================
 
     let conversationId = "";
 
 
     // =========================================================
-    // Ensure anonymous session
+    // Get current session
     // =========================================================
 
     async function ensureSession() {
@@ -156,7 +161,9 @@
 
 
       if (error) {
-        throw error;
+        throw new Error(
+          `getSession error:\n${error.message}`
+        );
       }
 
 
@@ -173,170 +180,13 @@
 
 
       if (signInError) {
-        throw signInError;
+        throw new Error(
+          `Anonymous login error:\n${signInError.message}`
+        );
       }
 
 
       return signInData?.session ?? null;
-    }
-
-
-    // =========================================================
-    // Send message
-    // =========================================================
-
-    async function sendRassMessage(query) {
-
-      if (
-        !query ||
-        typeof query !== "string"
-      ) {
-        throw new Error(
-          "query is required"
-        );
-      }
-
-
-      const {
-        data,
-        error
-      } =
-        await supabase.functions.invoke(
-          "rass-chat",
-          {
-            body: {
-              query,
-              conversation_id:
-                conversationId,
-              inputs: {}
-            }
-          }
-        );
-
-
-      // -------------------------------------------------------
-      // IMPORTANT:
-      // Edge Function が 4xx / 5xx を返した場合、
-      // error.context に Response が入るので、
-      // その本文(JSON)を取得する。
-      // -------------------------------------------------------
-
-      if (error) {
-
-        console.error(
-          "Supabase Function Error:",
-          error
-        );
-
-
-        if (error.context) {
-
-          try {
-
-            const response =
-              error.context;
-
-            const text =
-              await response.text();
-
-
-            let parsed;
-
-            try {
-              parsed = JSON.parse(text);
-            } catch {
-              parsed = null;
-            }
-
-
-            if (parsed) {
-
-              throw new Error(
-                "Edge Function returned an error:\n\n" +
-                JSON.stringify(
-                  parsed,
-                  null,
-                  2
-                )
-              );
-
-            }
-
-
-            throw new Error(
-              "Edge Function returned an error:\n\n" +
-              text
-            );
-
-          } catch (contextError) {
-
-            // 上で作った詳細エラーなら、そのまま返す
-            if (
-              contextError instanceof Error &&
-              contextError.message.startsWith(
-                "Edge Function returned an error:"
-              )
-            ) {
-              throw contextError;
-            }
-
-            console.error(
-              "Could not read error.context:",
-              contextError
-            );
-          }
-        }
-
-
-        throw new Error(
-          error.message ||
-          "RASS API request failed"
-        );
-      }
-
-
-      // -------------------------------------------------------
-      // Edge Function が 200 を返したが
-      // ok:false の場合
-      // -------------------------------------------------------
-
-      if (!data?.ok) {
-
-        throw new Error(
-          "Edge Function returned ok:false:\n\n" +
-          JSON.stringify(
-            data,
-            null,
-            2
-          )
-        );
-      }
-
-
-      // -------------------------------------------------------
-      // Success
-      // -------------------------------------------------------
-
-      return {
-
-        answer:
-          data.answer || "",
-
-        conversationId:
-          data.conversation_id || "",
-
-        messageId:
-          data.message_id || "",
-
-        session:
-          data.session || null,
-
-        debug:
-          data.debug || null,
-
-        stageTag:
-          data.stage_tag || null
-      };
     }
 
 
@@ -363,7 +213,6 @@
           if (
             !session?.user?.id
           ) {
-
             throw new Error(
               "匿名ユーザーの取得に失敗しました。"
             );
@@ -374,7 +223,13 @@
             [
               "匿名ログイン成功",
               "",
-              `ユーザーID: ${session.user.id}`,
+              `user.id: ${session.user.id}`,
+              "",
+              `JWTあり: ${
+                session.access_token
+                  ? "YES"
+                  : "NO"
+              }`,
               "",
               "次に「こんにちはを送信」をクリックしてください。"
             ].join("\n");
@@ -384,19 +239,15 @@
 
         } catch (error) {
 
-          console.error(
-            error
-          );
-
+          console.error(error);
 
           out.textContent =
             [
-              "ログインエラー",
+              "LOGIN ERROR",
               "",
               error?.message ||
                 String(error)
             ].join("\n");
-
 
           login.disabled = false;
         }
@@ -405,7 +256,7 @@
 
 
     // =========================================================
-    // Send
+    // Raw fetch to Edge Function
     // =========================================================
 
     send.addEventListener(
@@ -414,58 +265,198 @@
 
         send.disabled = true;
 
-
         out.textContent =
-          "Edge Functionへ送信中…";
+          "Edge Functionへ直接fetchしています…";
 
 
         try {
 
-          const result =
-            await sendRassMessage(
-              "こんにちは"
+          // ---------------------------------------------------
+          // Get fresh session
+          // ---------------------------------------------------
+
+          const {
+            data,
+            error
+          } =
+            await supabase.auth.getSession();
+
+
+          if (error) {
+            throw new Error(
+              `getSession error:\n${error.message}`
             );
+          }
 
 
-          conversationId =
-            result.conversationId;
+          const session =
+            data?.session;
+
+
+          if (!session) {
+            throw new Error(
+              "Supabase session がありません。"
+            );
+          }
+
+
+          if (!session.access_token) {
+            throw new Error(
+              "access_token がありません。"
+            );
+          }
+
+
+          // ---------------------------------------------------
+          // Request body
+          // ---------------------------------------------------
+
+          const requestBody = {
+            query: "こんにちは",
+
+            conversation_id:
+              conversationId,
+
+            inputs: {}
+          };
+
+
+          // ---------------------------------------------------
+          // Direct fetch
+          // ---------------------------------------------------
+
+          let response;
+
+
+          try {
+
+            response =
+              await fetch(
+                FUNCTION_URL,
+                {
+                  method: "POST",
+
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+
+                    "Authorization":
+                      `Bearer ${session.access_token}`,
+
+                    "apikey":
+                      SUPABASE_PUBLISHABLE_KEY
+                  },
+
+                  body:
+                    JSON.stringify(
+                      requestBody
+                    )
+                }
+              );
+
+          } catch (fetchError) {
+
+            throw new Error(
+              [
+                "FETCH ERROR",
+                "",
+                fetchError?.message ||
+                  String(fetchError),
+                "",
+                "Edge Function URL:",
+                FUNCTION_URL
+              ].join("\n")
+            );
+          }
+
+
+          // ---------------------------------------------------
+          // Read raw body
+          // ---------------------------------------------------
+
+          const rawBody =
+            await response.text();
+
+
+          // ---------------------------------------------------
+          // Try JSON
+          // ---------------------------------------------------
+
+          let parsedBody = null;
+
+
+          try {
+
+            parsedBody =
+              rawBody
+                ? JSON.parse(rawBody)
+                : null;
+
+          } catch {
+            parsedBody = null;
+          }
+
+
+          // ---------------------------------------------------
+          // Display EVERYTHING
+          // ---------------------------------------------------
+
+          const display = {
+
+            http_status:
+              response.status,
+
+            http_status_text:
+              response.statusText,
+
+            ok:
+              response.ok,
+
+            function_url:
+              FUNCTION_URL,
+
+            response_headers: {
+              content_type:
+                response.headers.get(
+                  "content-type"
+                ),
+
+              request_id:
+                response.headers.get(
+                  "x-request-id"
+                )
+            },
+
+            raw_body:
+              rawBody,
+
+            parsed_body:
+              parsedBody
+          };
 
 
           out.textContent =
-            [
-              "SUCCESS",
-              "",
-              `回答: ${result.answer}`,
-              "",
-              `conversation_id: ${
-                result.conversationId ||
-                "(なし)"
-              }`,
-              "",
-              `message_id: ${
-                result.messageId ||
-                "(なし)"
-              }`,
-              "",
-              "session:",
-              JSON.stringify(
-                result.session,
-                null,
-                2
-              ),
-              "",
-              "debug:",
-              JSON.stringify(
-                result.debug,
-                null,
-                2
-              ),
-              "",
-              `stage_tag: ${
-                result.stageTag ||
-                "(なし)"
-              }`
-            ].join("\n");
+            JSON.stringify(
+              display,
+              null,
+              2
+            );
+
+
+          // ---------------------------------------------------
+          // Success
+          // ---------------------------------------------------
+
+          if (
+            response.ok &&
+            parsedBody?.ok
+          ) {
+
+            conversationId =
+              parsedBody.conversation_id ||
+              conversationId;
+
+          }
 
         } catch (error) {
 
@@ -476,7 +467,7 @@
 
           out.textContent =
             [
-              "API ERROR",
+              "CLIENT ERROR",
               "",
               error?.message ||
                 String(error)
