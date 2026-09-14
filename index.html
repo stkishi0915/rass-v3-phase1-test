@@ -3,18 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RASS v3 Phase 2-2 Raw Debug Test</title>
+  <title>RASS v3 Step 2 Update Test</title>
 
   <style>
     body {
-      font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
-      max-width: 1000px;
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
       margin: 40px auto;
       padding: 0 20px;
       line-height: 1.6;
@@ -23,12 +17,11 @@
 
     button {
       padding: 10px 16px;
-      border-radius: 8px;
+      margin: 0 8px 8px 0;
       border: 1px solid #94a3b8;
-      background: #fff;
+      border-radius: 8px;
+      background: white;
       cursor: pointer;
-      margin-right: 8px;
-      margin-bottom: 8px;
     }
 
     button:disabled {
@@ -45,7 +38,6 @@
       padding: 16px;
       margin-top: 18px;
       min-height: 250px;
-      overflow-x: auto;
     }
 
     .note {
@@ -55,434 +47,312 @@
       border-radius: 10px;
       margin: 16px 0;
     }
-
-    .warning {
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      padding: 14px;
-      border-radius: 10px;
-      margin: 16px 0;
-    }
-
-    code {
-      background: #f1f5f9;
-      padding: 2px 5px;
-      border-radius: 4px;
-    }
   </style>
 </head>
 
 <body>
 
-  <h1>RASS v3 Phase 2-2 Raw Debug Test</h1>
+<h1>RASS v3 Step 2 Update Test</h1>
 
-  <div class="note">
-    このページはEdge FunctionのHTTPレスポンスを直接取得する
-    デバッグ専用ページです。
-  </div>
+<div class="note">
+  このページは、Supabaseの rass_sessions.current_step を
+  「1 → 2」に更新できるかを確認する専用テストです。
+</div>
 
-  <div class="warning">
-    <strong>確認内容</strong><br>
-    匿名ログイン → JWT取得 → Edge Functionへfetch →<br>
-    HTTPステータスとレスポンス本文をそのまま表示します。
-  </div>
+<button id="login">匿名ログイン</button>
+<button id="send" disabled>Step 2へ更新</button>
 
-  <button id="login">
-    匿名ログイン
-  </button>
+<pre id="out">まず「匿名ログイン」をクリックしてください。</pre>
 
-  <button id="send" disabled>
-    こんにちはを送信
-  </button>
+<script type="module">
 
-  <pre id="out">準備完了。まず「匿名ログイン」をクリックしてください。</pre>
+import {
+  createClient
+} from "https://esm.sh/@supabase/supabase-js@2";
 
 
-  <script type="module">
+// =========================================================
+// Supabase
+// =========================================================
 
-    import {
-      createClient
-    } from "https://esm.sh/@supabase/supabase-js@2";
+const SUPABASE_URL =
+  "https://vifxsktvfhsepnasfmpq.supabase.co";
 
+const SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_flQ-6JFCEMEmeRKOBkdrug_WY1CBMmP";
 
-    // =========================================================
-    // Supabase
-    // =========================================================
+const FUNCTION_URL =
+  `${SUPABASE_URL}/functions/v1/rass-chat`;
 
-    const SUPABASE_URL =
-      "https://vifxsktvfhsepnasfmpq.supabase.co";
-
-    const SUPABASE_PUBLISHABLE_KEY =
-      "sb_publishable_flQ-6JFCEMEmeRKOBkdrug_WY1CBMmP";
-
-
-    const FUNCTION_URL =
-      `${SUPABASE_URL}/functions/v1/rass-chat`;
+const supabase =
+  createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
+  );
 
 
-    const supabase =
-      createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY
-      );
+// =========================================================
+// DOM
+// =========================================================
+
+const out =
+  document.getElementById("out");
+
+const login =
+  document.getElementById("login");
+
+const send =
+  document.getElementById("send");
 
 
-    // =========================================================
-    // DOM
-    // =========================================================
+// =========================================================
+// Login
+// =========================================================
 
-    const out =
-      document.getElementById("out");
+login.addEventListener(
+  "click",
+  async () => {
 
-    const login =
-      document.getElementById("login");
+    login.disabled = true;
 
-    const send =
-      document.getElementById("send");
+    out.textContent =
+      "匿名ログイン中…";
 
-
-    // =========================================================
-    // State
-    // =========================================================
-
-    let conversationId = "";
-
-
-    // =========================================================
-    // Get current session
-    // =========================================================
-
-    async function ensureSession() {
+    try {
 
       const {
         data,
         error
-      } = await supabase.auth.getSession();
-
-
-      if (error) {
-        throw new Error(
-          `getSession error:\n${error.message}`
-        );
-      }
-
-
-      if (data?.session) {
-        return data.session;
-      }
-
-
-      const {
-        data: signInData,
-        error: signInError
       } =
         await supabase.auth.signInAnonymously();
 
+      if (error) {
+        throw error;
+      }
 
-      if (signInError) {
+      const session =
+        data?.session;
+
+      if (!session?.user?.id) {
         throw new Error(
-          `Anonymous login error:\n${signInError.message}`
+          "匿名ユーザーを取得できませんでした。"
+        );
+      }
+
+      out.textContent =
+        [
+          "匿名ログイン成功",
+          "",
+          `ユーザーID: ${session.user.id}`,
+          "",
+          "次に「Step 2へ更新」をクリックしてください。"
+        ].join("\n");
+
+      send.disabled = false;
+
+    } catch (error) {
+
+      console.error(error);
+
+      out.textContent =
+        [
+          "LOGIN ERROR",
+          "",
+          error?.message ||
+            String(error)
+        ].join("\n");
+
+      login.disabled = false;
+    }
+  }
+);
+
+
+// =========================================================
+// Step 2 update test
+// =========================================================
+
+send.addEventListener(
+  "click",
+  async () => {
+
+    send.disabled = true;
+
+    out.textContent =
+      "Step 2更新を送信中…";
+
+    try {
+
+      // -----------------------------------------------------
+      // Get current session
+      // -----------------------------------------------------
+
+      const {
+        data,
+        error
+      } =
+        await supabase.auth.getSession();
+
+      if (error) {
+        throw error;
+      }
+
+      const session =
+        data?.session;
+
+      if (!session) {
+        throw new Error(
+          "Supabase session がありません。"
         );
       }
 
 
-      return signInData?.session ?? null;
-    }
-
-
-    // =========================================================
-    // Login
-    // =========================================================
-
-    login.addEventListener(
-      "click",
-      async () => {
-
-        login.disabled = true;
-
-        out.textContent =
-          "匿名ログイン中…";
-
-
-        try {
-
-          const session =
-            await ensureSession();
-
-
-          if (
-            !session?.user?.id
-          ) {
-            throw new Error(
-              "匿名ユーザーの取得に失敗しました。"
-            );
-          }
-
-
-          out.textContent =
-            [
-              "匿名ログイン成功",
-              "",
-              `user.id: ${session.user.id}`,
-              "",
-              `JWTあり: ${
-                session.access_token
-                  ? "YES"
-                  : "NO"
-              }`,
-              "",
-              "次に「こんにちはを送信」をクリックしてください。"
-            ].join("\n");
-
-
-          send.disabled = false;
-
-        } catch (error) {
-
-          console.error(error);
-
-          out.textContent =
-            [
-              "LOGIN ERROR",
-              "",
-              error?.message ||
-                String(error)
-            ].join("\n");
-
-          login.disabled = false;
-        }
-      }
-    );
-
-
-    // =========================================================
-    // Raw fetch to Edge Function
-    // =========================================================
-
-    send.addEventListener(
-      "click",
-      async () => {
-
-        send.disabled = true;
-
-        out.textContent =
-          "Edge Functionへ直接fetchしています…";
-
-
-        try {
-
-          // ---------------------------------------------------
-          // Get fresh session
-          // ---------------------------------------------------
-
-          const {
-            data,
-            error
-          } =
-            await supabase.auth.getSession();
-
-
-          if (error) {
-            throw new Error(
-              `getSession error:\n${error.message}`
-            );
-          }
-
-
-          const session =
-            data?.session;
-
-
-          if (!session) {
-            throw new Error(
-              "Supabase session がありません。"
-            );
-          }
-
-
-          if (!session.access_token) {
-            throw new Error(
-              "access_token がありません。"
-            );
-          }
-
-
-          // ---------------------------------------------------
-          // Request body
-          // ---------------------------------------------------
-
-        const requestBody = {
-  query: "Step 2へ進みます",
-
-  current_step: 2,
-
-  conversation_id:
-    conversationId,
-
-  inputs: {}
-};
-
-          // ---------------------------------------------------
-          // Direct fetch
-          // ---------------------------------------------------
-
-          let response;
-
-
-          try {
-
-            response =
-              await fetch(
-                FUNCTION_URL,
-                {
-                  method: "POST",
-
-                  headers: {
-                    "Content-Type":
-                      "application/json",
-
-                    "Authorization":
-                      `Bearer ${session.access_token}`,
-
-                    "apikey":
-                      SUPABASE_PUBLISHABLE_KEY
-                  },
-
-                  body:
-                    JSON.stringify(
-                      requestBody
-                    )
-                }
-              );
-
-          } catch (fetchError) {
-
-            throw new Error(
-              [
-                "FETCH ERROR",
-                "",
-                fetchError?.message ||
-                  String(fetchError),
-                "",
-                "Edge Function URL:",
-                FUNCTION_URL
-              ].join("\n")
-            );
-          }
-
-
-          // ---------------------------------------------------
-          // Read raw body
-          // ---------------------------------------------------
-
-          const rawBody =
-            await response.text();
-
-
-          // ---------------------------------------------------
-          // Try JSON
-          // ---------------------------------------------------
-
-          let parsedBody = null;
-
-
-          try {
-
-            parsedBody =
-              rawBody
-                ? JSON.parse(rawBody)
-                : null;
-
-          } catch {
-            parsedBody = null;
-          }
-
-
-          // ---------------------------------------------------
-          // Display EVERYTHING
-          // ---------------------------------------------------
-
-          const display = {
-
-            http_status:
-              response.status,
-
-            http_status_text:
-              response.statusText,
-
-            ok:
-              response.ok,
-
-            function_url:
-              FUNCTION_URL,
-
-            response_headers: {
-              content_type:
-                response.headers.get(
-                  "content-type"
-                ),
-
-              request_id:
-                response.headers.get(
-                  "x-request-id"
-                )
+      // -----------------------------------------------------
+      // IMPORTANT
+      // ここで必ず current_step: 2 を送る
+      // -----------------------------------------------------
+
+      const requestBody = {
+
+        query:
+          "Step 2へ進みます",
+
+        current_step:
+          2,
+
+        conversation_id:
+          "",
+
+        inputs: {}
+      };
+
+
+      // -----------------------------------------------------
+      // Display request before sending
+      // -----------------------------------------------------
+
+      out.textContent =
+        [
+          "送信するデータ:",
+          "",
+          JSON.stringify(
+            requestBody,
+            null,
+            2
+          ),
+          "",
+          "送信中…"
+        ].join("\n");
+
+
+      // -----------------------------------------------------
+      // Direct fetch
+      // -----------------------------------------------------
+
+      const response =
+        await fetch(
+          FUNCTION_URL,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              "Authorization":
+                `Bearer ${session.access_token}`,
+
+              "apikey":
+                SUPABASE_PUBLISHABLE_KEY
             },
 
-            raw_body:
-              rawBody,
-
-            parsed_body:
-              parsedBody
-          };
-
-
-          out.textContent =
-            JSON.stringify(
-              display,
-              null,
-              2
-            );
-
-
-          // ---------------------------------------------------
-          // Success
-          // ---------------------------------------------------
-
-          if (
-            response.ok &&
-            parsedBody?.ok
-          ) {
-
-            conversationId =
-              parsedBody.conversation_id ||
-              conversationId;
-
+            body:
+              JSON.stringify(
+                requestBody
+              )
           }
-
-        } catch (error) {
-
-          console.error(
-            error
-          );
+        );
 
 
-          out.textContent =
-            [
-              "CLIENT ERROR",
-              "",
-              error?.message ||
-                String(error)
-            ].join("\n");
+      // -----------------------------------------------------
+      // Read response
+      // -----------------------------------------------------
 
-        } finally {
+      const rawBody =
+        await response.text();
 
-          send.disabled = false;
+      let parsedBody = null;
 
-        }
+      try {
+        parsedBody =
+          JSON.parse(rawBody);
+      } catch {
+        parsedBody = null;
       }
-    );
 
-  </script>
+
+      // -----------------------------------------------------
+      // Display
+      // -----------------------------------------------------
+
+      out.textContent =
+        [
+          "HTTP RESULT",
+          "",
+          `status: ${response.status}`,
+          "",
+          "送信したデータ:",
+          JSON.stringify(
+            requestBody,
+            null,
+            2
+          ),
+          "",
+          "Edge Function response:",
+          rawBody,
+          "",
+          "判定:",
+          parsedBody
+            ? JSON.stringify(
+                {
+                  requested_step:
+                    parsedBody.debug?.requested_step,
+
+                  current_step:
+                    parsedBody.debug?.current_step,
+
+                  step_updated:
+                    parsedBody.debug?.step_updated,
+
+                  session_current_step:
+                    parsedBody.session?.current_step
+                },
+                null,
+                2
+              )
+            : "(JSONではありません)"
+        ].join("\n");
+
+    } catch (error) {
+
+      console.error(error);
+
+      out.textContent =
+        [
+          "CLIENT ERROR",
+          "",
+          error?.message ||
+            String(error)
+        ].join("\n");
+
+    } finally {
+
+      send.disabled = false;
+    }
+  }
+);
+
+</script>
 
 </body>
 </html>
