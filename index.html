@@ -3,114 +3,494 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RASS v3 Phase 1 API Test</title>
+  <title>RASS v3 Phase 2-2 Debug Test</title>
+
   <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:900px;margin:40px auto;padding:0 20px;line-height:1.6;color:#1f2937}
-    button{padding:10px 16px;border-radius:8px;border:1px solid #94a3b8;background:#fff;cursor:pointer;margin-right:8px}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    #out{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-top:18px;min-height:120px}
-    .note{background:#eff6ff;border:1px solid #bfdbfe;padding:12px 14px;border-radius:10px;margin:16px 0}
-    code{background:#f1f5f9;padding:2px 5px;border-radius:4px}
+    body {
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+      color: #1f2937;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid #94a3b8;
+      background: #fff;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    #out {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 18px;
+      min-height: 180px;
+    }
+
+    .note {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin: 16px 0;
+    }
+
+    .debug {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin: 16px 0;
+    }
+
+    code {
+      background: #f1f5f9;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
   </style>
 </head>
+
 <body>
-  <h1>RASS v3 Phase 1 API Test</h1>
+
+  <h1>RASS v3 Phase 2-2 Debug Test</h1>
+
   <div class="note">
-    このページは Phase 1 の疎通確認用です。Dify APIキーはこのHTMLには保存していません。
+    このページは Phase 2-2 のデバッグ用です。<br>
+    匿名ログイン → Supabase Edge Function → rass_sessions → Dify
+    のどこでエラーが発生しているか確認します。
   </div>
 
-  <button id="login">匿名ログイン</button>
-  <button id="send" disabled>こんにちはを送信</button>
+  <div class="debug">
+    <strong>現在のテスト内容</strong><br>
+    「こんにちは」を送信し、Edge Function の詳細なエラーJSONを表示します。
+  </div>
+
+  <button id="login">
+    匿名ログイン
+  </button>
+
+  <button id="send" disabled>
+    こんにちはを送信
+  </button>
+
   <pre id="out">準備完了。まず「匿名ログイン」をクリックしてください。</pre>
 
+
   <script type="module">
-    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-    // Public values only. The Dify API key is NOT stored in this file.
-    const SUPABASE_URL = "https://vifxsktvfhsepnasfmpq.supabase.co";
-    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_flQ-6JFCEMEmeRKOBkdrug_WY1CBMmP";
+    import {
+      createClient
+    } from "https://esm.sh/@supabase/supabase-js@2";
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-    const out = document.getElementById("out");
-    const send = document.getElementById("send");
-    const login = document.getElementById("login");
+
+    // =========================================================
+    // Supabase
+    // =========================================================
+
+    const SUPABASE_URL =
+      "https://vifxsktvfhsepnasfmpq.supabase.co";
+
+    const SUPABASE_PUBLISHABLE_KEY =
+      "sb_publishable_flQ-6JFCEMEmeRKOBkdrug_WY1CBMmP";
+
+
+    const supabase =
+      createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY
+      );
+
+
+    // =========================================================
+    // DOM
+    // =========================================================
+
+    const out =
+      document.getElementById("out");
+
+    const send =
+      document.getElementById("send");
+
+    const login =
+      document.getElementById("login");
+
+
+    // =========================================================
+    // Conversation ID
+    // =========================================================
 
     let conversationId = "";
 
-    async function ensureSession() {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session) return data.session;
 
-      const { data: signInData, error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
+    // =========================================================
+    // Ensure anonymous session
+    // =========================================================
+
+    async function ensureSession() {
+
+      const {
+        data,
+        error
+      } = await supabase.auth.getSession();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      if (data?.session) {
+        return data.session;
+      }
+
+
+      const {
+        data: signInData,
+        error: signInError
+      } =
+        await supabase.auth.signInAnonymously();
+
+
+      if (signInError) {
+        throw signInError;
+      }
+
+
       return signInData?.session ?? null;
     }
 
+
+    // =========================================================
+    // Send message
+    // =========================================================
+
     async function sendRassMessage(query) {
-      if (!query || typeof query !== "string") {
-        throw new Error("query is required");
+
+      if (
+        !query ||
+        typeof query !== "string"
+      ) {
+        throw new Error(
+          "query is required"
+        );
       }
 
-      const { data, error } = await supabase.functions.invoke("rass-chat", {
-        body: {
-          query,
-          conversation_id: conversationId,
-          inputs: {}
-        }
-      });
+
+      const {
+        data,
+        error
+      } =
+        await supabase.functions.invoke(
+          "rass-chat",
+          {
+            body: {
+              query,
+              conversation_id:
+                conversationId,
+              inputs: {}
+            }
+          }
+        );
+
+
+      // -------------------------------------------------------
+      // IMPORTANT:
+      // Edge Function が 4xx / 5xx を返した場合、
+      // error.context に Response が入るので、
+      // その本文(JSON)を取得する。
+      // -------------------------------------------------------
 
       if (error) {
-        throw new Error(error.message || "RASS API request failed");
+
+        console.error(
+          "Supabase Function Error:",
+          error
+        );
+
+
+        if (error.context) {
+
+          try {
+
+            const response =
+              error.context;
+
+            const text =
+              await response.text();
+
+
+            let parsed;
+
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              parsed = null;
+            }
+
+
+            if (parsed) {
+
+              throw new Error(
+                "Edge Function returned an error:\n\n" +
+                JSON.stringify(
+                  parsed,
+                  null,
+                  2
+                )
+              );
+
+            }
+
+
+            throw new Error(
+              "Edge Function returned an error:\n\n" +
+              text
+            );
+
+          } catch (contextError) {
+
+            // 上で作った詳細エラーなら、そのまま返す
+            if (
+              contextError instanceof Error &&
+              contextError.message.startsWith(
+                "Edge Function returned an error:"
+              )
+            ) {
+              throw contextError;
+            }
+
+            console.error(
+              "Could not read error.context:",
+              contextError
+            );
+          }
+        }
+
+
+        throw new Error(
+          error.message ||
+          "RASS API request failed"
+        );
       }
+
+
+      // -------------------------------------------------------
+      // Edge Function が 200 を返したが
+      // ok:false の場合
+      // -------------------------------------------------------
 
       if (!data?.ok) {
-        throw new Error(data?.error || "RASS API request failed");
+
+        throw new Error(
+          "Edge Function returned ok:false:\n\n" +
+          JSON.stringify(
+            data,
+            null,
+            2
+          )
+        );
       }
 
+
+      // -------------------------------------------------------
+      // Success
+      // -------------------------------------------------------
+
       return {
-        answer: data.answer || "",
-        conversationId: data.conversation_id || "",
-        messageId: data.message_id || ""
+
+        answer:
+          data.answer || "",
+
+        conversationId:
+          data.conversation_id || "",
+
+        messageId:
+          data.message_id || "",
+
+        session:
+          data.session || null,
+
+        debug:
+          data.debug || null,
+
+        stageTag:
+          data.stage_tag || null
       };
     }
 
-    login.addEventListener("click", async () => {
-      login.disabled = true;
-      out.textContent = "匿名ログイン中…";
 
-      try {
-        const session = await ensureSession();
-        if (!session?.user?.id) {
-          throw new Error("匿名ユーザーの取得に失敗しました。");
+    // =========================================================
+    // Login
+    // =========================================================
+
+    login.addEventListener(
+      "click",
+      async () => {
+
+        login.disabled = true;
+
+        out.textContent =
+          "匿名ログイン中…";
+
+
+        try {
+
+          const session =
+            await ensureSession();
+
+
+          if (
+            !session?.user?.id
+          ) {
+
+            throw new Error(
+              "匿名ユーザーの取得に失敗しました。"
+            );
+          }
+
+
+          out.textContent =
+            [
+              "匿名ログイン成功",
+              "",
+              `ユーザーID: ${session.user.id}`,
+              "",
+              "次に「こんにちはを送信」をクリックしてください。"
+            ].join("\n");
+
+
+          send.disabled = false;
+
+        } catch (error) {
+
+          console.error(
+            error
+          );
+
+
+          out.textContent =
+            [
+              "ログインエラー",
+              "",
+              error?.message ||
+                String(error)
+            ].join("\n");
+
+
+          login.disabled = false;
         }
-        out.textContent = `匿名ログイン成功\nユーザーID: ${session.user.id}\n\n次に「こんにちはを送信」をクリックしてください。`;
-        send.disabled = false;
-      } catch (error) {
-        console.error(error);
-        out.textContent = `ログインエラー: ${error?.message || error}`;
-        login.disabled = false;
       }
-    });
+    );
 
-    send.addEventListener("click", async () => {
-      send.disabled = true;
-      out.textContent += "\n\nDifyへ送信中…";
 
-      try {
-        const result = await sendRassMessage("こんにちは");
-        conversationId = result.conversationId;
-        out.textContent = [
-          `回答: ${result.answer}`,
-          `conversation_id: ${conversationId || "(なし)"}`,
-          `message_id: ${result.messageId || "(なし)"}`
-        ].join("\n\n");
-      } catch (error) {
-        console.error(error);
-        out.textContent = `APIエラー: ${error?.message || error}`;
-      } finally {
-        send.disabled = false;
+    // =========================================================
+    // Send
+    // =========================================================
+
+    send.addEventListener(
+      "click",
+      async () => {
+
+        send.disabled = true;
+
+
+        out.textContent =
+          "Edge Functionへ送信中…";
+
+
+        try {
+
+          const result =
+            await sendRassMessage(
+              "こんにちは"
+            );
+
+
+          conversationId =
+            result.conversationId;
+
+
+          out.textContent =
+            [
+              "SUCCESS",
+              "",
+              `回答: ${result.answer}`,
+              "",
+              `conversation_id: ${
+                result.conversationId ||
+                "(なし)"
+              }`,
+              "",
+              `message_id: ${
+                result.messageId ||
+                "(なし)"
+              }`,
+              "",
+              "session:",
+              JSON.stringify(
+                result.session,
+                null,
+                2
+              ),
+              "",
+              "debug:",
+              JSON.stringify(
+                result.debug,
+                null,
+                2
+              ),
+              "",
+              `stage_tag: ${
+                result.stageTag ||
+                "(なし)"
+              }`
+            ].join("\n");
+
+        } catch (error) {
+
+          console.error(
+            error
+          );
+
+
+          out.textContent =
+            [
+              "API ERROR",
+              "",
+              error?.message ||
+                String(error)
+            ].join("\n");
+
+        } finally {
+
+          send.disabled = false;
+
+        }
       }
-    });
+    );
+
   </script>
+
 </body>
 </html>
